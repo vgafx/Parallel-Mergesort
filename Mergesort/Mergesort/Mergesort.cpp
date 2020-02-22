@@ -188,7 +188,6 @@ int main(int argc, char* argv[])
 		std::string_view version(version_str, 10);
 		ScopedTimer timer(version);
 		TopDownSplitParSec(w_data, 0, input_size, data, 1);
-
 	}
 	else { //Seq
 		std::string_view version(version_str, 10);
