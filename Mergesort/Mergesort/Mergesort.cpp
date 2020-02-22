@@ -14,26 +14,24 @@ enum Order {
 static int max_depth;
 
 template<typename T>
-void Merge(const std::vector<T>& data, int start, int middle, int end, std::vector<T> w_data) {
+void Merge(const std::vector<T>& data, int start, int middle, int end, std::vector<T>& w_data) {
 	int i = start;
 	int j = middle;
 
 	for (int k = start; k < end; k++) {
 		if (i < middle && (j >= end || data[i] <= data[j])) {
-			//w_data[k] = data[i];
-			w_data.at(k) = data[i];
+			w_data[k] = data[i];
 			i++;
 		}
 		else {
-			//w_data[k] = data[j];
-			w_data.at(k) = data[j];
+			w_data[k] = data[j];
 			j++;
 		}
 	}
 }
 
 template<typename T>
-void TopDownSplitSeq(const std::vector<T>& w_data, int start, int end, const std::vector<T>& data) {
+void TopDownSplitSeq(std::vector<T>& w_data, int start, int end, std::vector<T>& data) {
 	if (end - start < 2) return;
 
 	int middle = (start + end) / 2;
@@ -45,8 +43,9 @@ void TopDownSplitSeq(const std::vector<T>& w_data, int start, int end, const std
 	Merge(w_data, start, middle, end, data);
 }
 
+/*Limited to OpenMP 2.0 directives as msvc does not support newer versions of OpenMP.*/
 template<typename T>
-void TopDownSplitParSec(std::vector<T> w_data, int start, int end, std::vector<T> data, int c_depth) {
+void TopDownSplitParSec(std::vector<T>& w_data, int start, int end, std::vector<T>& data, int c_depth) {
 	if (end - start < 2) return;
 
 	if (c_depth > max_depth) {
@@ -54,19 +53,25 @@ void TopDownSplitParSec(std::vector<T> w_data, int start, int end, std::vector<T
 		return;
 	}
 
-	int middle = (start - end) / 2;
+	int middle = (start + end) / 2;
+	c_depth++;
 
 #pragma omp parallel sections num_threads(2)
 	{
 #pragma omp section
-		TopDownSplitParSec(data, start, middle, w_data, ++c_depth);
+		{
+		//std::cout << "Thread id: " << omp_get_thread_num() << "\n";
+		TopDownSplitParSec(data, start, middle, w_data, c_depth);
+		}
 #pragma omp section
-		TopDownSplitParSec(data, middle, end, w_data, ++c_depth);
+		{
+		//std::cout << "Thread id: " << omp_get_thread_num() << "\n";
+		TopDownSplitParSec(data, middle, end, w_data, c_depth);
+		}
 	}
 
 	Merge(w_data, start, middle, end, data);
 }
-
 
 
 template<typename T>
@@ -91,7 +96,7 @@ int main(int argc, char* argv[])
 
 	srand(seed);
 
-
+	/*Read and limit the input from cmd line*/
 	for (int cnt = 0; cnt < argc; cnt++) {
 		//std::cout << argv[cnt] << "\n";
 		const char *arg = argv[cnt];
@@ -111,7 +116,7 @@ int main(int argc, char* argv[])
 
 		if (*argv[cnt] == 's') {
 			int val = atoi(argv[cnt + 1]);
-			if (val > 0 && val < 1000000000) {
+			if (val > 0 && val <= 200000000) {
 				input_size = val;
 			}
 		}
@@ -171,14 +176,19 @@ int main(int argc, char* argv[])
 
 	const char* version_str = (version_flag) ? "Parallel  " : "Sequential";
 	max_depth = depth;
-	PrintVector(data);
-	PrintVector(w_data);
-	std::cout << "++++\n";
+	omp_set_num_threads(num_threads);
+	omp_set_nested(1);
 
+	std::cout << "Input Size: " << input_size << "\n";
+	std::cout << "Order: " << order << "\n";
+	std::cout << "Threads: " << num_threads << "\n";
+	std::cout << "Type: int\n";
+	
 	if (version_flag) { //Parallel
 		std::string_view version(version_str, 10);
 		ScopedTimer timer(version);
-		TopDownSplitParSec(w_data, 0, input_size, data, 0);
+		TopDownSplitParSec(w_data, 0, input_size, data, 1);
+
 	}
 	else { //Seq
 		std::string_view version(version_str, 10);
@@ -187,8 +197,7 @@ int main(int argc, char* argv[])
 	}
 
 
-	PrintVector(data);
-	PrintVector(w_data);
+	//PrintVector(data);
 
 	std::cin.get();
 }
